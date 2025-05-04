@@ -2,7 +2,7 @@ import { type NextAuthOptions, User } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import { prisma } from './prisma'; // Adjusted import path for prisma
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 
 // Add necessary imports that might have been outside the previous selection
 // For example, if User type was imported from elsewhere
