@@ -1,0 +1,171 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  // output   = "../src/generated/prisma" // Removed custom output path
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// --- User Model (Base for NextAuth + App Specific Fields) ---
+
+model User {
+  id            String    @id @default(cuid()) // NextAuth requires id
+  name          String?                      // Optional for NextAuth
+  email         String?   @unique              // Optional for NextAuth (unless email provider used)
+  emailVerified DateTime?                      // Used by NextAuth Email provider
+  image         String?                      // Optional for NextAuth
+  hashedPassword String?                      // Added for Credentials provider
+
+  // App-Specific Fields
+  level         Int       @default(1)
+  xp            Int       @default(0)
+
+  // NextAuth Relations
+  accounts      Account[]
+  sessions      Session[]
+
+  // App-Specific Relations
+  workouts      Workout[]
+  bodyWeightLog BodyWeightLog[]
+  fitnessGoals  FitnessGoal[]
+  restDayLogs   RestDayLog[]
+  chats         Chat[]
+}
+
+// --- NextAuth.js Models (Required by Prisma Adapter) ---
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// --- App-Specific Models ---
+
+model Workout {
+  id     String     @id @default(cuid())
+  userId String
+  date   DateTime   @default(now())
+  name   String?
+  notes  String?
+
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  exercises Exercise[]
+
+  @@index([userId, date])
+}
+
+model Exercise {
+  id        String   @id @default(cuid())
+  workoutId String
+  name      String // e.g., "Bench Press", "Squat", "Run"
+  order     Int?   // Optional order within the workout
+
+  workout Workout      @relation(fields: [workoutId], references: [id], onDelete: Cascade)
+  sets    WorkoutSet[]
+}
+
+model WorkoutSet {
+  id              String  @id @default(cuid())
+  exerciseId      String
+  setNumber       Int     // e.g., 1, 2, 3
+
+  // Metrics (make optional as not all apply to every set/exercise)
+  repetitions     Int?
+  weightKg        Float?
+  durationSeconds Int?
+  distanceKm      Float?
+  notes           String?
+
+  exercise Exercise @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+
+  @@index([exerciseId])
+}
+
+model BodyWeightLog {
+  id       String   @id @default(cuid())
+  userId   String
+  date     DateTime @default(now())
+  weightKg Float
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, date])
+}
+
+model FitnessGoal {
+  id          String    @id @default(cuid())
+  userId      String
+  description String    // e.g., "Run 5k", "Hold a 1-minute plank", "Achieve handstand"
+  status      String    @default("active") // e.g., "active", "achieved", "abandoned"
+  targetDate  DateTime?
+  createdAt   DateTime  @default(now())
+  achievedAt  DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+}
+
+model RestDayLog {
+  id     String   @id @default(cuid())
+  userId String
+  date   DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date]) // A user can only have one rest day entry per date
+}
+
+// --- Chat History Model ---
+model Chat {
+  id        String   @id @default(cuid())
+  title     String?  // Title for the chat session, can be generated
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages  Json     // Stores the array of CoreMessage objects
+
+  @@index([userId, updatedAt]) // Index for fetching user's chats sorted by date
+}
